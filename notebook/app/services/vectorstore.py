@@ -5,8 +5,11 @@ Choix clé : une collection Chroma PAR notebook (préfixée "notebook_<id>").
 Ça isole complètement les sources d'un notebook par rapport aux autres,
 exactement comme NotebookLM ne mélange jamais les sources entre projets.
 
-Les embeddings sont calculés localement avec sentence-transformers
-(aucun appel API, aucun coût, fonctionne offline).
+Les embeddings sont calculés localement, via le modèle ONNX embarqué par
+ChromaDB (variante quantifiée d'all-MiniLM-L6-v2, servie par onnxruntime).
+Aucun appel API, aucun coût, fonctionne offline — et surtout beaucoup plus
+léger en mémoire que sentence-transformers/PyTorch, ce qui compte sur les
+plateformes gratuites limitées à ~512 Mo de RAM (Render free tier, etc).
 """
 import chromadb
 from chromadb.utils import embedding_functions
@@ -27,11 +30,9 @@ def get_client():
 def get_embedding_fn():
     global _embedding_fn
     if _embedding_fn is None:
-        # Charge le modèle sentence-transformers une seule fois (coûteux au 1er appel)
-        model_name = settings.embedding_model.split("/")[-1]
-        _embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=f"sentence-transformers/{model_name}"
-        )
+        # Modèle ONNX léger embarqué par ChromaDB (pas de dépendance PyTorch,
+        # empreinte mémoire bien plus faible que SentenceTransformerEmbeddingFunction).
+        _embedding_fn = embedding_functions.DefaultEmbeddingFunction()
     return _embedding_fn
 
 

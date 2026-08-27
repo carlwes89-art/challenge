@@ -14,7 +14,9 @@ langchain==0.3.7
 langchain-community==0.3.7
 langchain-text-splitters==0.3.2
 chromadb==0.5.20
-sentence-transformers==3.3.1
+onnxruntime==1.19.2   # exécute le modèle d'embeddings ONNX embarqué par ChromaDB (léger, sans PyTorch)
+tokenizers==0.20.3
+tqdm==4.67.1
 
 # LLM clients
 ollama==0.3.3

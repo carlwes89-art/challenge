@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
 
     # --- Embeddings ---
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Calculés localement via le modèle ONNX embarqué par ChromaDB
+    # (voir app/services/vectorstore.py) — pas de réglage nécessaire ici.
 
     # --- Chunking ---
     chunk_size: int = 1000

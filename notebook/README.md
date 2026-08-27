@@ -36,7 +36,7 @@ FastAPI (app/main.py)
     ┌───────┴────────┐
     ▼                ▼
 ingestion.py      vectorstore.py ──► ChromaDB (persistant, 1 collection / notebook)
-(extraction +          │                     embeddings via sentence-transformers (local)
+(extraction +          │                     embeddings via ONNX MiniLM (local, léger)
  chunking)              │
                         ▼
                     llm.py ──► Ollama (local, Qwen) OU API Anthropic (au choix)
@@ -69,7 +69,7 @@ provider utilisé, nombre de sources). C'est ce qui alimente :
 | Choix | Alternative écartée | Raison |
 |---|---|---|
 | ChromaDB | FAISS, Pinecone | Persistant nativement, pas de service externe à gérer, collections isolées faciles |
-| sentence-transformers (local) | Embeddings OpenAI/Anthropic | Gratuit, pas de clé API requise, fonctionne offline |
+| ONNX MiniLM embarqué par ChromaDB (local) | Embeddings OpenAI/Anthropic | Gratuit, pas de clé API requise, fonctionne offline, léger en mémoire (pas de PyTorch) |
 | Ollama + Qwen par défaut | API cloud uniquement | Zéro coût, zéro dépendance réseau pour la démo ; bascule vers Anthropic en une variable d'env si besoin de meilleure qualité |
 | SQLite | PostgreSQL | Zéro setup, largement suffisant pour des métadonnées (pas de charge concurrente à gérer ici) |
 | RAG orchestré à la main (pas de chaîne LangChain opaque) | `RetrievalQA` LangChain tout-en-un | Contrôle total sur le prompt et les citations, plus facile à expliquer et déboguer |
