@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     # Gemini (Google AI Studio) : offre gratuite permanente, sans carte bancaire.
     # Clé à récupérer sur https://aistudio.google.com/apikey
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.6-flash"
     gemini_api_key: str = ""
 
     # --- Embeddings ---
