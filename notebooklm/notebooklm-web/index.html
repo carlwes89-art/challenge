@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RAG Notebook Chatbot</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="spine">📚</span> RAG Notebook Chatbot</div>
+  <a class="tab active" href="index.html">Accueil</a>
+  <a class="tab" href="espace-utilisateur.html">Espace Utilisateur</a>
+  <a class="tab" href="espace-developpeur.html">Espace Développeur</a>
+  <div class="topbar-spacer"></div>
+  <div id="cfg-bar"></div>
+</div>
+
+<div class="page">
+  <div class="eyebrow">Chatbot RAG · façon NotebookLM</div>
+  <h1>Pose tes questions, obtiens des réponses sourcées.</h1>
+  <p class="subtitle">Dépose des documents dans un notebook, interroge-les, et compare les moteurs LLM en coulisses.</p>
+
+  <div id="status-badge" style="margin-top:18px;">
+    <span class="badge badge-muted"><span class="spinner"></span> Vérification de l'API…</span>
+  </div>
+
+  <div id="stat-grid" class="stat-grid" style="margin-top:18px; display:none;"></div>
+  <div id="api-error-hint" class="card" style="margin-top:18px; display:none;"></div>
+
+  <hr class="divider" />
+
+  <p class="hint" style="margin-bottom:14px;">Choisis ton interface :</p>
+  <div class="card-grid">
+    <a class="card-link" href="espace-utilisateur.html">
+      <div class="icon">🧑</div>
+      <h3>Espace Utilisateur</h3>
+      <p>Dépose un document, pose des questions dessus, obtiens des réponses avec citations des sources.</p>
+      <span class="btn btn-primary btn-block">Ouvrir l'espace utilisateur</span>
+    </a>
+    <a class="card-link" href="espace-developpeur.html">
+      <div class="icon">🛠️</div>
+      <h3>Espace Développeur</h3>
+      <p>Statistiques d'usage, comparaison Ollama vs Claude, visualisation du pipeline RAG étape par étape.</p>
+      <span class="btn btn-primary btn-block">Ouvrir l'espace développeur</span>
+    </a>
+  </div>
+
+  <hr class="divider" />
+  <p class="hint">Astuce : les deux espaces restent accessibles à tout moment depuis les onglets en haut de page.</p>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+mountConfigBar("cfg-bar");
+
+async function init() {
+  const statusEl = document.getElementById("status-badge");
+  const ok = await Api.healthCheckWithWakeup(() => {
+    statusEl.innerHTML = `<span class="badge badge-muted"><span class="spinner"></span> Réveil du serveur (service gratuit endormi, ~30-60s)…</span>`;
+  });
+  if (ok) {
+    statusEl.innerHTML = `<span class="badge badge-ok"><span class="badge-dot"></span> API connectée</span>`;
+    try {
+      const overview = await Api.getStatsOverview();
+      const grid = document.getElementById("stat-grid");
+      grid.style.display = "grid";
+      grid.innerHTML = `
+        <div class="stat-card"><div class="stat-value">${overview.notebooks_count}</div><div class="stat-label">Notebooks</div></div>
+        <div class="stat-card"><div class="stat-value">${overview.documents_ready}</div><div class="stat-label">Documents indexés</div></div>
+        <div class="stat-card"><div class="stat-value">${overview.total_queries}</div><div class="stat-label">Questions posées</div></div>
+      `;
+    } catch (e) { /* silencieux, comme la version Streamlit */ }
+  } else {
+    statusEl.innerHTML = `<span class="badge badge-error"><span class="badge-dot"></span> API non joignable</span>`;
+    const hint = document.getElementById("api-error-hint");
+    hint.style.display = "block";
+    hint.innerHTML = `❌ API non joignable à <code class="mono">${getApiBaseUrl()}</code>.
+      Vérifie que le backend tourne (<code class="mono">uvicorn app.main:app --reload</code>),
+      ou règle l'URL du backend dans la barre "🔌 Backend" en haut de page.`;
+  }
+}
+init();
+</script>
+</body>
+</html>

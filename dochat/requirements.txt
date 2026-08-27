@@ -1,0 +1,9 @@
+pypdf
+chromadb
+sentence-transformers
+python-docx
+pandas
+openpyxl
+python-pptx
+beautifulsoup4
+faiss-cpu

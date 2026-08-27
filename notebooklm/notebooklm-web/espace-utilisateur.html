@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Espace Utilisateur — RAG Notebook Chatbot</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="spine">📚</span> RAG Notebook Chatbot</div>
+  <a class="tab" href="index.html">Accueil</a>
+  <a class="tab active" href="espace-utilisateur.html">Espace Utilisateur</a>
+  <a class="tab" href="espace-developpeur.html">Espace Développeur</a>
+  <div class="topbar-spacer"></div>
+  <div id="cfg-bar"></div>
+</div>
+
+<div class="page wide">
+  <div class="eyebrow">🧑 Espace Utilisateur</div>
+  <h1>Dépose tes documents, pose tes questions.</h1>
+  <p class="subtitle">Chaque réponse cite ses sources.</p>
+
+  <div id="api-down" class="card" style="margin-top:16px; display:none;">
+    ❌ API non joignable. Vérifie que le backend tourne, ou règle l'URL dans la barre "🔌 Backend" en haut.
+  </div>
+
+  <div id="main-layout" class="layout" style="margin-top:20px; display:none;">
+    <!-- Sidebar -->
+    <div>
+      <div class="card">
+        <h3 style="font-size:14px;">📓 Notebook</h3>
+        <div class="field" style="margin-top:12px;">
+          <label>Choisis un notebook</label>
+          <select id="notebook-select"></select>
+        </div>
+        <div id="new-notebook-form" style="display:none;">
+          <div class="field">
+            <label>Nom du notebook</label>
+            <input type="text" id="nb-name" placeholder="Ex. Cours d'algèbre" />
+          </div>
+          <div class="field">
+            <label>Description (optionnel)</label>
+            <textarea id="nb-desc" rows="2"></textarea>
+          </div>
+          <button class="btn btn-primary btn-block" id="nb-create-btn">Créer le notebook</button>
+        </div>
+      </div>
+
+      <div class="card" id="documents-card" style="display:none;">
+        <h3 style="font-size:14px;">📄 Documents</h3>
+        <label style="margin-top:12px;">Ajouter un document</label>
+        <label class="dropzone" id="dropzone">
+          <span id="dropzone-text">Clique ou dépose un fichier<br /><span class="hint">pdf · docx · txt · md</span></span>
+          <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md" />
+        </label>
+        <button class="btn btn-primary btn-block" id="upload-btn" style="margin-top:10px; display:none;">📤 Uploader</button>
+        <div id="upload-status" class="hint" style="margin-top:8px;"></div>
+
+        <div id="doc-list" style="margin-top:14px;"></div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div>
+      <div class="section-title">
+        <h3 id="notebook-title" style="font-size:16px;">💬</h3>
+      </div>
+      <div id="no-doc-warning" class="hint" style="margin:8px 0; display:none;">⚠️ Ajoute au moins un document indexé (dans la barre latérale) avant de poser une question.</div>
+
+      <div class="chat-panel" style="margin-top:10px;">
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="chat-empty">Pas encore de conversation dans ce notebook.</div>
+        </div>
+      </div>
+
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Pose ta question sur les documents de ce notebook..." disabled />
+        <button class="btn btn-primary" id="chat-send" disabled>Envoyer</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="empty-notebooks" class="empty-state" style="display:none;">
+    👈 Crée un notebook pour commencer (n'importe quel sujet : cours, rapport, article...).
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+mountConfigBar("cfg-bar");
+
+let notebooks = [];
+let currentNotebookId = null;
+let currentDocuments = [];
+let selectedFile = null;
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s ?? "";
+  return d.innerHTML;
+}
+
+function renderSourcesHtml(sources) {
+  if (!sources || sources.length === 0) return "";
+  const items = sources.map(s => `
+    <div class="source-item">
+      <div class="fname">${escapeHtml(s.filename)} — extrait #${s.chunk_index}</div>
+      <div class="excerpt">${escapeHtml(s.excerpt)}</div>
+    </div>
+  `).join("");
+  return `
+    <details class="sources">
+      <summary>📚 ${sources.length} source(s) citée(s)</summary>
+      ${items}
+    </details>
+  `;
+}
+
+function appendMessage(role, content, sources) {
+  const scroll = document.getElementById("chat-scroll");
+  const empty = scroll.querySelector(".chat-empty");
+  if (empty) empty.remove();
+  const div = document.createElement("div");
+  div.className = `msg msg-${role}`;
+  div.innerHTML = `<div class="msg-role">${role === "user" ? "Toi" : "Assistant"}</div>${escapeHtml(content)}${renderSourcesHtml(sources)}`;
+  scroll.appendChild(div);
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+async function loadNotebooks() {
+  notebooks = await Api.getNotebooks();
+  const select = document.getElementById("notebook-select");
+  select.innerHTML = `<option value="__new__">➕ Nouveau notebook</option>` +
+    notebooks.map(nb => `<option value="${nb.id}">${escapeHtml(nb.name)}</option>`).join("");
+
+  if (notebooks.length === 0) {
+    select.value = "__new__";
+    onNotebookChange();
+  } else if (!currentNotebookId || !notebooks.find(nb => nb.id === currentNotebookId)) {
+    select.value = notebooks[0].id;
+    onNotebookChange();
+  } else {
+    select.value = currentNotebookId;
+  }
+}
+
+function onNotebookChange() {
+  const select = document.getElementById("notebook-select");
+  const value = select.value;
+  const newForm = document.getElementById("new-notebook-form");
+  const docsCard = document.getElementById("documents-card");
+  const mainLayout = document.getElementById("main-layout");
+  const emptyNotebooks = document.getElementById("empty-notebooks");
+
+  if (value === "__new__") {
+    newForm.style.display = "block";
+    docsCard.style.display = "none";
+    currentNotebookId = null;
+    if (notebooks.length === 0) {
+      mainLayout.style.display = "grid";
+      document.querySelector(".layout > div:nth-child(2)").style.display = "none";
+      emptyNotebooks.style.display = "block";
+    } else {
+      document.querySelector(".layout > div:nth-child(2)").style.display = "block";
+      emptyNotebooks.style.display = "none";
+    }
+    return;
+  }
+
+  newForm.style.display = "none";
+  docsCard.style.display = "block";
+  document.querySelector(".layout > div:nth-child(2)").style.display = "block";
+  emptyNotebooks.style.display = "none";
+  currentNotebookId = value;
+  const nb = notebooks.find(n => n.id === value);
+  document.getElementById("notebook-title").textContent = `💬 ${nb ? nb.name : ""}`;
+  loadDocuments();
+  loadHistory();
+}
+
+async function loadDocuments() {
+  if (!currentNotebookId) return;
+  currentDocuments = await Api.listDocuments(currentNotebookId);
+  const list = document.getElementById("doc-list");
+  if (currentDocuments.length === 0) {
+    list.innerHTML = `<div class="hint">Aucun document pour l'instant.</div>`;
+  } else {
+    const icons = { ready: "✅", processing: "⏳", error: "❌" };
+    list.innerHTML = currentDocuments.map(doc => `
+      <div class="doc-row">
+        <div>
+          <div class="doc-name">${icons[doc.status] || "❓"} ${escapeHtml(doc.filename)}</div>
+          <div class="doc-meta">${doc.num_chunks} chunks${doc.error_message ? " · " + escapeHtml(doc.error_message) : ""}</div>
+        </div>
+        <button class="doc-del" data-id="${doc.id}" title="Supprimer ce document">🗑️</button>
+      </div>
+    `).join("");
+    list.querySelectorAll(".doc-del").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await Api.deleteDocument(currentNotebookId, btn.dataset.id);
+        await loadDocuments();
+      });
+    });
+  }
+
+  const hasReady = currentDocuments.some(d => d.status === "ready");
+  document.getElementById("no-doc-warning").style.display = hasReady ? "none" : "block";
+  document.getElementById("chat-input").disabled = !hasReady;
+  document.getElementById("chat-send").disabled = !hasReady;
+}
+
+async function loadHistory() {
+  const scroll = document.getElementById("chat-scroll");
+  scroll.innerHTML = `<div class="chat-empty">Chargement…</div>`;
+  const history = await Api.getChatHistory(currentNotebookId);
+  scroll.innerHTML = "";
+  if (history.length === 0) {
+    scroll.innerHTML = `<div class="chat-empty">Pas encore de conversation dans ce notebook.</div>`;
+  } else {
+    history.forEach(msg => appendMessage(msg.role, msg.content, msg.sources));
+  }
+}
+
+async function sendQuestion() {
+  const input = document.getElementById("chat-input");
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  appendMessage("user", question, null);
+
+  const sendBtn = document.getElementById("chat-send");
+  sendBtn.disabled = true;
+  input.disabled = true;
+  const scroll = document.getElementById("chat-scroll");
+  const loadingDiv = document.createElement("div");
+  loadingDiv.className = "msg msg-assistant";
+  loadingDiv.innerHTML = `<div class="msg-role">Assistant</div><span class="spinner"></span> Recherche dans les documents et rédaction de la réponse…`;
+  scroll.appendChild(loadingDiv);
+  scroll.scrollTop = scroll.scrollHeight;
+
+  try {
+    const result = await Api.askQuestion(currentNotebookId, question);
+    loadingDiv.remove();
+    appendMessage("assistant", result.answer, result.sources);
+  } catch (e) {
+    loadingDiv.remove();
+    appendMessage("assistant", `Erreur : ${e.message}`, null);
+  } finally {
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+function setupFileInput() {
+  const dropzone = document.getElementById("dropzone");
+  const fileInput = document.getElementById("file-input");
+  const uploadBtn = document.getElementById("upload-btn");
+  const dzText = document.getElementById("dropzone-text");
+
+  fileInput.addEventListener("change", () => {
+    if (fileInput.files.length) {
+      selectedFile = fileInput.files[0];
+      dzText.innerHTML = `📄 ${escapeHtml(selectedFile.name)}`;
+      uploadBtn.style.display = "block";
+    }
+  });
+  ["dragover", "dragenter"].forEach(evt =>
+    dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add("drag-over"); })
+  );
+  ["dragleave", "drop"].forEach(evt =>
+    dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove("drag-over"); })
+  );
+  dropzone.addEventListener("drop", e => {
+    if (e.dataTransfer.files.length) {
+      selectedFile = e.dataTransfer.files[0];
+      dzText.innerHTML = `📄 ${escapeHtml(selectedFile.name)}`;
+      uploadBtn.style.display = "block";
+    }
+  });
+
+  uploadBtn.addEventListener("click", async () => {
+    if (!selectedFile) return;
+    const statusEl = document.getElementById("upload-status");
+    statusEl.innerHTML = `<span class="spinner"></span> Traitement de « ${escapeHtml(selectedFile.name)} »...`;
+    uploadBtn.disabled = true;
+    try {
+      const doc = await Api.uploadDocument(currentNotebookId, selectedFile);
+      if (doc.status === "ready") {
+        statusEl.textContent = `✅ ${doc.filename} indexé (${doc.num_chunks} chunks)`;
+      } else {
+        statusEl.textContent = `❌ Erreur : ${doc.error_message || "inconnue"}`;
+      }
+    } catch (e) {
+      statusEl.textContent = `Échec de l'upload : ${e.message}`;
+    }
+    selectedFile = null;
+    fileInput.value = "";
+    dzText.innerHTML = `Clique ou dépose un fichier<br /><span class="hint">pdf · docx · txt · md</span>`;
+    uploadBtn.style.display = "none";
+    uploadBtn.disabled = false;
+    await loadDocuments();
+  });
+}
+
+async function init() {
+  const downEl = document.getElementById("api-down");
+  const ok = await Api.healthCheckWithWakeup(() => {
+    downEl.style.display = "block";
+    downEl.innerHTML = `<span class="spinner"></span> Réveil du serveur (service gratuit endormi, ça peut prendre jusqu'à une minute)…`;
+  });
+  if (!ok) {
+    downEl.style.display = "block";
+    downEl.innerHTML = `❌ API non joignable. Vérifie que le backend tourne, ou règle l'URL dans la barre "🔌 Backend" en haut.`;
+    return;
+  }
+  downEl.style.display = "none";
+  document.getElementById("main-layout").style.display = "grid";
+
+  document.getElementById("notebook-select").addEventListener("change", onNotebookChange);
+  document.getElementById("nb-create-btn").addEventListener("click", async () => {
+    const name = document.getElementById("nb-name").value.trim();
+    const desc = document.getElementById("nb-desc").value.trim();
+    if (!name) { alert("Donne un nom au notebook."); return; }
+    await Api.createNotebook(name, desc);
+    document.getElementById("nb-name").value = "";
+    document.getElementById("nb-desc").value = "";
+    await loadNotebooks();
+  });
+  document.getElementById("chat-send").addEventListener("click", sendQuestion);
+  document.getElementById("chat-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") sendQuestion();
+  });
+  setupFileInput();
+
+  await loadNotebooks();
+}
+init();
+</script>
+</body>
+</html>

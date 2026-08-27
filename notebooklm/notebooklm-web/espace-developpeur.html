@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Espace Développeur — RAG Notebook Chatbot</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="assets/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="spine">📚</span> RAG Notebook Chatbot</div>
+  <a class="tab" href="index.html">Accueil</a>
+  <a class="tab" href="espace-utilisateur.html">Espace Utilisateur</a>
+  <a class="tab active" href="espace-developpeur.html">Espace Développeur</a>
+  <div class="topbar-spacer"></div>
+  <div id="cfg-bar"></div>
+</div>
+
+<div class="page wide">
+  <div class="eyebrow">🛠️ Espace Développeur</div>
+  <h1>Statistiques, comparaisons, pipeline RAG.</h1>
+  <p class="subtitle">Moteurs LLM, latences, et visualisation étape par étape.</p>
+
+  <div id="api-down" class="card" style="margin-top:16px; display:none;">
+    ❌ API non joignable. Vérifie que le backend tourne, ou règle l'URL dans la barre "🔌 Backend" en haut.
+  </div>
+
+  <div id="content" style="display:none;">
+
+    <hr class="divider" />
+    <h3>📊 Vue d'ensemble</h3>
+    <div class="stat-grid" id="overview-grid" style="margin-top:14px;"></div>
+    <div class="stat-grid" id="overview-grid-2" style="margin-top:14px;"></div>
+    <div id="anthropic-hint" class="hint card" style="margin-top:14px; display:none;"></div>
+
+    <hr class="divider" />
+    <h3>⚖️ Comparaison des outils (moyennes sur les requêtes passées)</h3>
+    <div class="card" style="margin-top:14px;">
+      <canvas id="provider-chart" height="90"></canvas>
+    </div>
+    <div class="card" id="provider-table-wrap" style="margin-top:14px;"></div>
+
+    <hr class="divider" />
+    <h3>🥊 Comparer les moteurs en direct</h3>
+    <p class="hint">Envoie la même question à tous les moteurs disponibles et compare réponses + latences côte à côte.</p>
+    <div class="card" style="margin-top:12px;">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="field" style="min-width:200px;">
+          <label>Notebook</label>
+          <select id="compare-nb"></select>
+        </div>
+        <div class="field" style="flex:1; min-width:240px;">
+          <label>Question à comparer</label>
+          <input type="text" id="compare-q" />
+        </div>
+        <button class="btn btn-primary" id="compare-btn" style="height:38px;">🚀 Lancer la comparaison</button>
+      </div>
+      <div class="compare-grid" id="compare-results"></div>
+      <div class="card" style="margin-top:14px; display:none;" id="compare-chart-wrap">
+        <canvas id="compare-chart" height="100"></canvas>
+      </div>
+    </div>
+
+    <hr class="divider" />
+    <h3>🔍 Visualiser le pipeline RAG étape par étape</h3>
+    <p class="hint">Exécute une question et inspecte ce que le système a réellement récupéré et généré, sans polluer l'historique de chat de l'utilisateur.</p>
+    <div class="card" style="margin-top:12px;">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="field" style="min-width:200px;">
+          <label>Notebook</label>
+          <select id="trace-nb"></select>
+        </div>
+        <div class="field" style="flex:1; min-width:240px;">
+          <label>Question à tracer</label>
+          <input type="text" id="trace-q" />
+        </div>
+        <button class="btn btn-primary" id="trace-btn" style="height:38px;">🔬 Exécuter et visualiser</button>
+      </div>
+      <div id="trace-results" style="margin-top:16px;"></div>
+    </div>
+
+    <hr class="divider" />
+    <h3>📓 Répartition par notebook</h3>
+    <div class="card" style="margin-top:14px;">
+      <canvas id="notebook-chart" height="90"></canvas>
+    </div>
+
+    <hr class="divider" />
+    <h3>🧾 Requêtes récentes</h3>
+    <div class="card" id="queries-table-wrap" style="margin-top:14px;"></div>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/api.js"></script>
+<script>
+mountConfigBar("cfg-bar");
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s ?? "";
+  return d.innerHTML;
+}
+
+const CHART_COLORS = { retrieval: "#4fb0a0", generation: "#dfa25a", third: "#e07a68" };
+Chart.defaults.color = "#8d97a8";
+Chart.defaults.borderColor = "#2b3341";
+Chart.defaults.font.family = "Inter, sans-serif";
+
+async function loadOverview() {
+  const overview = await Api.getStatsOverview();
+  document.getElementById("overview-grid").innerHTML = `
+    <div class="stat-card"><div class="stat-value">${overview.notebooks_count}</div><div class="stat-label">Notebooks</div></div>
+    <div class="stat-card"><div class="stat-value">${overview.documents_count}</div><div class="stat-label">Documents</div><div class="stat-sub">${overview.documents_ready} prêts · ${overview.documents_error} en erreur</div></div>
+    <div class="stat-card"><div class="stat-value">${overview.total_chunks}</div><div class="stat-label">Chunks indexés</div></div>
+    <div class="stat-card"><div class="stat-value">${overview.total_queries}</div><div class="stat-label">Requêtes traitées</div></div>
+  `;
+  document.getElementById("overview-grid-2").innerHTML = `
+    <div class="stat-card"><div class="stat-value">${overview.avg_retrieval_ms.toFixed(0)} ms</div><div class="stat-label">Latence retrieval moyenne</div></div>
+    <div class="stat-card"><div class="stat-value">${overview.avg_generation_ms.toFixed(0)} ms</div><div class="stat-label">Latence génération moyenne</div></div>
+    <div class="stat-card"><div class="stat-value">${escapeHtml(overview.active_provider)}</div><div class="stat-label">Moteur actif</div></div>
+  `;
+  if (!overview.anthropic_configured) {
+    const hint = document.getElementById("anthropic-hint");
+    hint.style.display = "block";
+    hint.innerHTML = `ℹ️ Clé Anthropic non configurée (<code class="mono">ANTHROPIC_API_KEY</code> dans <code class="mono">.env</code>) — la comparaison ci-dessous ne montrera qu'Ollama tant qu'elle n'est pas définie.`;
+  }
+}
+
+async function loadProviderStats() {
+  const stats = await Api.getProviderStats();
+  const wrap = document.getElementById("provider-table-wrap");
+  if (!stats.length) {
+    wrap.innerHTML = `<div class="empty-state">Aucune requête enregistrée pour l'instant. Pose une question dans l'espace utilisateur, ou lance une comparaison ci-dessous.</div>`;
+    return;
+  }
+  new Chart(document.getElementById("provider-chart"), {
+    type: "bar",
+    data: {
+      labels: stats.map(s => s.provider),
+      datasets: [
+        { label: "Latence retrieval (ms)", data: stats.map(s => s.avg_retrieval_ms), backgroundColor: CHART_COLORS.retrieval },
+        { label: "Latence génération (ms)", data: stats.map(s => s.avg_generation_ms), backgroundColor: CHART_COLORS.generation },
+      ],
+    },
+    options: { responsive: true, plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true, title: { display: true, text: "Latence (ms)" } } } },
+  });
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Provider</th><th>Requêtes</th><th>Retrieval moy.</th><th>Génération moy.</th><th>Total moy.</th></tr></thead>
+      <tbody>${stats.map(s => `<tr><td>${escapeHtml(s.provider)}</td><td>${s.count}</td><td>${s.avg_retrieval_ms.toFixed(0)} ms</td><td>${s.avg_generation_ms.toFixed(0)} ms</td><td>${s.avg_total_ms.toFixed(0)} ms</td></tr>`).join("")}</tbody>
+    </table>
+  `;
+}
+
+function sourcesBlock(sources) {
+  if (!sources || !sources.length) return "";
+  return `
+    <details class="sources">
+      <summary>${sources.length} source(s)</summary>
+      ${sources.map(s => `<div class="source-item"><div class="fname">${escapeHtml(s.filename)}</div><div class="excerpt mono">${escapeHtml(s.excerpt)}</div></div>`).join("")}
+    </details>
+  `;
+}
+
+async function populateNotebookSelects() {
+  const notebooks = await Api.getNotebooks();
+  const opts = notebooks.map(nb => `<option value="${nb.id}">${escapeHtml(nb.name)}</option>`).join("");
+  document.getElementById("compare-nb").innerHTML = opts;
+  document.getElementById("trace-nb").innerHTML = opts;
+  const noNb = notebooks.length === 0;
+  document.getElementById("compare-btn").disabled = noNb;
+  document.getElementById("trace-btn").disabled = noNb;
+  if (noNb) {
+    document.getElementById("compare-results").innerHTML = `<div class="empty-state">Crée un notebook (dans l'espace utilisateur) avec au moins un document pour tester la comparaison.</div>`;
+    document.getElementById("trace-results").innerHTML = `<div class="empty-state">Crée un notebook avec des documents pour tester le pipeline.</div>`;
+  }
+  return notebooks;
+}
+
+let compareChart = null;
+
+async function runCompare() {
+  const nbId = document.getElementById("compare-nb").value;
+  const question = document.getElementById("compare-q").value.trim();
+  if (!question) return;
+  const resultsEl = document.getElementById("compare-results");
+  resultsEl.innerHTML = `<span class="spinner"></span> Exécution sur chaque moteur disponible...`;
+  let comparison;
+  try {
+    comparison = await Api.compareProviders(nbId, question);
+  } catch (e) {
+    resultsEl.innerHTML = `<div class="hint">Erreur : ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  const results = comparison.results || [];
+  resultsEl.innerHTML = results.map(res => `
+    <div class="compare-col">
+      <div class="provider-name">${escapeHtml((res.provider || "").charAt(0).toUpperCase() + (res.provider || "").slice(1))}</div>
+      ${res.error
+        ? `<div class="hint" style="color:var(--error);">${escapeHtml(res.error)}</div>`
+        : `<div style="font-size:13px;">${escapeHtml(res.answer || "")}</div>
+           <div class="latency-line">⏱️ Retrieval : ${res.retrieval_ms.toFixed(0)} ms · Génération : ${res.generation_ms.toFixed(0)} ms · Total : ${(res.retrieval_ms + res.generation_ms).toFixed(0)} ms</div>
+           ${sourcesBlock(res.sources)}`
+      }
+    </div>
+  `).join("");
+
+  const ok = results.filter(r => !r.error);
+  const chartWrap = document.getElementById("compare-chart-wrap");
+  if (ok.length >= 2) {
+    chartWrap.style.display = "block";
+    if (compareChart) compareChart.destroy();
+    compareChart = new Chart(document.getElementById("compare-chart"), {
+      type: "bar",
+      data: {
+        labels: ok.map(r => r.provider),
+        datasets: [
+          { label: "retrieval_ms", data: ok.map(r => r.retrieval_ms), backgroundColor: CHART_COLORS.retrieval, stack: "s" },
+          { label: "generation_ms", data: ok.map(r => r.generation_ms), backgroundColor: CHART_COLORS.generation, stack: "s" },
+        ],
+      },
+      options: { responsive: true, plugins: { legend: { position: "bottom" }, title: { display: true, text: "Latence totale par moteur pour cette question", color: "#eef1f6" } }, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } },
+    });
+  } else {
+    chartWrap.style.display = "none";
+  }
+}
+
+async function runTrace() {
+  const nbId = document.getElementById("trace-nb").value;
+  const question = document.getElementById("trace-q").value.trim();
+  if (!question) return;
+  const el = document.getElementById("trace-results");
+  el.innerHTML = `<span class="spinner"></span> Exécution du pipeline...`;
+  const comparison = await Api.compareProviders(nbId, question);
+  const result = (comparison.results || []).find(r => !r.error);
+  if (!result) {
+    el.innerHTML = `<div class="hint" style="color:var(--error);">Aucun moteur n'a pu répondre (vérifie qu'Ollama tourne, ou configure Anthropic).</div>`;
+    return;
+  }
+  const sourcesHtml = result.sources && result.sources.length
+    ? result.sources.map((s, i) => `
+        <details class="sources" style="margin-top:8px;">
+          <summary>[${i + 1}] ${escapeHtml(s.filename)} — extrait #${s.chunk_index}</summary>
+          <div class="source-item"><div class="excerpt mono">${escapeHtml(s.excerpt)}</div></div>
+        </details>
+      `).join("")
+    : `<div class="hint">Aucun chunk pertinent trouvé.</div>`;
+
+  el.innerHTML = `
+    <div class="hint">Moteur utilisé pour cette trace : <code class="mono">${escapeHtml(result.provider)}</code></div>
+
+    <div class="section-title" style="margin-top:16px;"><span class="step-label">1</span><strong>Retrieval</strong></div>
+    <div class="hint" style="margin-left:32px;">Chunks les plus proches sémantiquement, récupérés dans ChromaDB en ${result.retrieval_ms.toFixed(0)} ms</div>
+    <div style="margin-left:32px; margin-top:8px;">${sourcesHtml}</div>
+
+    <div class="section-title" style="margin-top:20px;"><span class="step-label">2</span><strong>Génération</strong></div>
+    <div class="hint" style="margin-left:32px;">Réponse construite à partir des sources ci-dessus en ${result.generation_ms.toFixed(0)} ms</div>
+    <div class="card" style="margin-left:32px; margin-top:8px; background:var(--paper-raised);">${escapeHtml(result.answer)}</div>
+  `;
+}
+
+async function loadNotebookBreakdown() {
+  const stats = await Api.getNotebookStats();
+  if (!stats.length) return;
+  new Chart(document.getElementById("notebook-chart"), {
+    type: "bar",
+    data: {
+      labels: stats.map(s => s.name),
+      datasets: [
+        { label: "document_count", data: stats.map(s => s.document_count), backgroundColor: CHART_COLORS.retrieval },
+        { label: "chunk_count", data: stats.map(s => s.chunk_count), backgroundColor: CHART_COLORS.generation },
+        { label: "query_count", data: stats.map(s => s.query_count), backgroundColor: CHART_COLORS.third },
+      ],
+    },
+    options: { responsive: true, plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true, title: { display: true, text: "Quantité" } } } },
+  });
+}
+
+async function loadRecentQueries() {
+  const queries = await Api.getRecentQueries(50);
+  const wrap = document.getElementById("queries-table-wrap");
+  if (!queries.length) {
+    wrap.innerHTML = `<div class="empty-state">Aucune requête enregistrée pour l'instant.</div>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Date</th><th>Provider</th><th>Question</th><th>Retrieval</th><th>Génération</th><th>Sources</th></tr></thead>
+      <tbody>${queries.map(q => `
+        <tr>
+          <td class="mono">${escapeHtml(new Date(q.created_at).toLocaleString("fr-FR"))}</td>
+          <td>${escapeHtml(q.provider)}</td>
+          <td>${escapeHtml(q.question)}</td>
+          <td>${q.retrieval_ms.toFixed(0)} ms</td>
+          <td>${q.generation_ms.toFixed(0)} ms</td>
+          <td>${q.num_sources}</td>
+        </tr>`).join("")}</tbody>
+    </table>
+  `;
+}
+
+async function init() {
+  const downEl = document.getElementById("api-down");
+  const ok = await Api.healthCheckWithWakeup(() => {
+    downEl.style.display = "block";
+    downEl.innerHTML = `<span class="spinner"></span> Réveil du serveur (service gratuit endormi, ça peut prendre jusqu'à une minute)…`;
+  });
+  if (!ok) {
+    downEl.style.display = "block";
+    downEl.innerHTML = `❌ API non joignable. Vérifie que le backend tourne, ou règle l'URL dans la barre "🔌 Backend" en haut.`;
+    return;
+  }
+  downEl.style.display = "none";
+  document.getElementById("content").style.display = "block";
+
+  await loadOverview();
+  await loadProviderStats();
+  await populateNotebookSelects();
+  await loadNotebookBreakdown();
+  await loadRecentQueries();
+
+  document.getElementById("compare-btn").addEventListener("click", runCompare);
+  document.getElementById("compare-q").addEventListener("keydown", e => { if (e.key === "Enter") runCompare(); });
+  document.getElementById("trace-btn").addEventListener("click", runTrace);
+  document.getElementById("trace-q").addEventListener("keydown", e => { if (e.key === "Enter") runTrace(); });
+}
+init();
+</script>
+</body>
+</html>
