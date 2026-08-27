@@ -7,7 +7,7 @@
  *   2. lue depuis le localStorage (réglée via la barre de config en haut de page), sinon
  *   3. la valeur par défaut ci-dessous.
  */
-const DEFAULT_API_BASE_URL = "https://challenge-1-nt5k.onrender.com";
+const DEFAULT_API_BASE_URL = "https://challenge-3-eme9.onrender.com";
 const STORAGE_KEY = "notebooklm_api_base_url";
 
 function getApiBaseUrl() {
