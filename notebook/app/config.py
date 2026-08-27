@@ -13,12 +13,18 @@ class Settings(BaseSettings):
     data_dir: str = "./data"                 # racine de stockage (uploads, db, vectorstore)
 
     # --- LLM ---
-    # "ollama" ou "anthropic" -> permet de changer de moteur sans toucher au code
+    # "ollama", "gemini" ou "anthropic" -> permet de changer de moteur sans toucher au code
+    # Par défaut "ollama" pour le dev local (docker-compose lance un serveur Ollama).
+    # En déploiement sans Ollama (Render, etc), régler LLM_PROVIDER=gemini dans les env vars.
     llm_provider: str = "ollama"
     ollama_model: str = "qwen2.5:7b"
     ollama_host: str = "http://localhost:11434"
     anthropic_model: str = "claude-sonnet-4-6"
     anthropic_api_key: str = ""
+    # Gemini (Google AI Studio) : offre gratuite permanente, sans carte bancaire.
+    # Clé à récupérer sur https://aistudio.google.com/apikey
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_api_key: str = ""
 
     # --- Embeddings ---
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"

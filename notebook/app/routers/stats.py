@@ -38,6 +38,7 @@ def overview(db: Session = Depends(get_db)):
         avg_generation_ms=round(avg_generation, 1),
         active_provider=settings.llm_provider,
         anthropic_configured=bool(settings.anthropic_api_key),
+        gemini_configured=bool(settings.gemini_api_key),
     )
 
 

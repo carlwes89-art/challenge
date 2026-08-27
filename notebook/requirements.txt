@@ -19,5 +19,6 @@ sentence-transformers==3.3.1
 # LLM clients
 ollama==0.3.3
 anthropic==0.39.0
+requests==2.32.3   # appel direct à l'API REST Gemini (Google AI Studio)
 
 python-dotenv==1.0.1

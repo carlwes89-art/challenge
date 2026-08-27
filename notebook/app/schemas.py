@@ -95,6 +95,7 @@ class StatsOverview(BaseModel):
     avg_generation_ms: float
     active_provider: str
     anthropic_configured: bool
+    gemini_configured: bool = False
 
 
 class QueryLogOut(BaseModel):

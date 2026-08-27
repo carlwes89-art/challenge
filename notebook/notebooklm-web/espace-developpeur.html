@@ -123,10 +123,10 @@ async function loadOverview() {
     <div class="stat-card"><div class="stat-value">${overview.avg_generation_ms.toFixed(0)} ms</div><div class="stat-label">Latence génération moyenne</div></div>
     <div class="stat-card"><div class="stat-value">${escapeHtml(overview.active_provider)}</div><div class="stat-label">Moteur actif</div></div>
   `;
-  if (!overview.anthropic_configured) {
+  if (!overview.anthropic_configured && !overview.gemini_configured) {
     const hint = document.getElementById("anthropic-hint");
     hint.style.display = "block";
-    hint.innerHTML = `ℹ️ Clé Anthropic non configurée (<code class="mono">ANTHROPIC_API_KEY</code> dans <code class="mono">.env</code>) — la comparaison ci-dessous ne montrera qu'Ollama tant qu'elle n'est pas définie.`;
+    hint.innerHTML = `ℹ️ Aucun moteur payant/cloud configuré (<code class="mono">GEMINI_API_KEY</code> ou <code class="mono">ANTHROPIC_API_KEY</code> dans les variables d'environnement) — la comparaison ci-dessous ne montrera qu'Ollama tant qu'aucune clé n'est définie.`;
   }
 }
 
