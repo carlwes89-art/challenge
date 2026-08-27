@@ -31,9 +31,9 @@ Trois façons de régler l'URL du backend, par ordre de priorité :
 1. **Paramètre d'URL** (pratique pour partager un lien) : `https://ton-site.vercel.app/?api=https://ton-backend.example.com`
    → mémorisé automatiquement dans le navigateur pour les visites suivantes.
 2. **Barre "🔌 Backend"** en haut de chaque page : tape l'URL et clique "Enregistrer".
-3. **Valeur par défaut** dans `assets/config.js` (`DEFAULT_API_BASE_URL`, actuellement
-   `http://localhost:8000` pour le dev local) — modifie-la si tu veux une valeur par défaut
-   différente une fois ton backend déployé.
+3. **Valeur par défaut** dans `assets/config.js` (`DEFAULT_API_BASE_URL`) — déjà réglée sur
+   `https://challenge-1-nt5k.onrender.com`, le backend déployé pour ce concours. Change-la si
+   tu redéploies le backend ailleurs.
 
 ## Déployer sur Vercel
 
