@@ -6,8 +6,9 @@ Documentation interactive auto-générée disponible sur /docs
 """
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import init_db
@@ -36,6 +37,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """
+    Filet de sécurité : une exception vraiment non gérée (bug, service externe
+    en panne...) serait normalement interceptée par le middleware d'erreurs
+    de Starlette, qui répond AVANT le middleware CORS — le navigateur reçoit
+    alors une réponse sans en-têtes CORS et l'affiche comme un échec réseau
+    générique, masquant la vraie cause. Ce handler renvoie une erreur 500
+    propre qui passe par le pipeline normal (CORS inclus).
+    """
+    return JSONResponse(status_code=500, content={"detail": f"Erreur interne : {exc}"})
+
 
 app.include_router(notebooks.router)
 app.include_router(documents.router)

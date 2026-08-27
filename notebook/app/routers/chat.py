@@ -52,7 +52,14 @@ def ask_question(notebook_id: str, payload: schemas.ChatRequest, db: Session = D
     )
     history = [{"role": m.role, "content": m.content} for m in reversed(past_messages)]
 
-    result = rag.answer_question(notebook_id, payload.question, history=history)
+    try:
+        result = rag.answer_question(notebook_id, payload.question, history=history)
+    except Exception as e:
+        # Convertie en HTTPException : ce chemin passe par le gestionnaire
+        # d'erreurs standard de Starlette, qui applique bien les en-têtes CORS
+        # (contrairement à une exception non gérée qui remonterait brute et
+        # ferait échouer la requête côté navigateur avec un NetworkError).
+        raise HTTPException(502, f"Le moteur LLM a échoué : {e}")
 
     # on sauvegarde les deux messages (question + réponse) pour l'historique
     user_msg = db_models.ChatMessage(
